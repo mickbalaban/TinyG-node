@@ -97,6 +97,11 @@ TinyGResponseError::
   * *When*: During an open connection
   * *Data Contents*: The exact _parsed_ JSON response from the TinyG.
 
+TinyGInAlarmError::
+  * *Meaning*: TinyG reported an error because the machine is in an Alarm state
+  * *When*: During an open connection, after an Alarm was triggered. There will be several of these after a <<flush,`flush()`>> that can be safely ignored.
+  * *Data Contents*: The exact _parsed_ JSON response from the TinyG.
+
 TinyGOpenError::
   * *Meaning*: TinyG failed to open a connection. This may occur if one was already open, in which case there is no change to the already-open connection, but the new one was not attempted.
   * *When*: Any time after <<open,`g.open()`>> has been called.
@@ -162,7 +167,7 @@ var list_results = { // see g.list() for how to get this structure
 }
 g.open(list_results.path, {dataPortPath : list_results.dataPortPath});
 ----
-<1> <<list,`g.list()`>>
+<1> See <<list,`g.list()`>>
 --
 
 [[close]]
@@ -200,7 +205,7 @@ g.write('{sr:n}\n');
 // Issue a feed hold ("pause") immediately.
 g.write('!');
 ----
-<1> <<set,`g.set()`>>
+<1> See <<set,`g.set()`>>
 --
 
   *** For objects that are not array-like:
@@ -216,7 +221,7 @@ g.write('!');
 // Note: g.set() should be used for this purpose instead!
 g.write({sr: null});
 ----
-<1> <<set,`g.set()`>>
+<1> See <<set,`g.set()`>>
 --
 
   *** For "Arrays" (objects that are array-like according to https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/isArray[`Array.isArray(value)`]):
@@ -304,10 +309,10 @@ g.writeWithPromise(lines)
 g.writeWithPromise(lines, last_line_seen_fulfilled_function).then(function() { we_are_done(); });
 
 ----
-<1> https://github.com/synthetos/TinyG/wiki/Status-Reports[Documentation on setting up status reports.]
-<2> https://github.com/synthetos/TinyG/wiki/Status-Reports#status-report-values[Documentation of `stat` values.]
-<3> https://github.com/synthetos/TinyG/wiki/JSON-Details#response-verbosity[Documentation of JSON Verbosity.]
-<4> http://documentup.com/kriskowal/q/[Documentation of Q promise handling].
+<1> See https://github.com/synthetos/TinyG/wiki/Status-Reports[documentation on setting up status reports.]
+<2> See https://github.com/synthetos/TinyG/wiki/Status-Reports#status-report-values[documentation of `stat` values.]
+<3> See https://github.com/synthetos/TinyG/wiki/JSON-Details#response-verbosity[documentation of JSON Verbosity.]
+<4> See http://documentup.com/kriskowal/q/[documentation of Q promise handling].
 --
 
 
@@ -346,8 +351,8 @@ g.set({xvm: 3000, yvm: 3000, zvm: 3000})
 
 
 ----
-<1> https://github.com/synthetos/TinyG/wiki/TinyG-Configuration[Explanation of `xvm`, `yvm`, and `zvm` values].
-<2> http://documentup.com/kriskowal/q/[Documentation of Q promise handling].
+<1> See https://github.com/synthetos/TinyG/wiki/TinyG-Configuration[explanation of `xvm`, `yvm`, and `zvm` values].
+<2> See http://documentup.com/kriskowal/q/[documentation of Q promise handling].
 --
 
 
@@ -371,7 +376,7 @@ g.get("xvm")
   })
   .catch(function(err) { couldnt_get_xvm(err); });
 ----
-<2> http://documentup.com/kriskowal/q/[Documentation of Q promise handling].
+<1> See http://documentup.com/kriskowal/q/[documentation of Q promise handling].
 --
 
 [[sendFile]]
@@ -386,14 +391,41 @@ g.get("xvm")
   `done_callback`:: (_Optional._) A function for the TinyG object to call when the file has finished sending. This will only be called after all lines have been sent AND `stat` has gone to 3 (movement stopped), 4 (program end via `M2` or `M30`), or 6 (alarm).
 --
 
-[[list]]
-##### list( _callback_ )
-  * Get a list of TinyGs available.
-  * _TODO_
+[[flush]]
+##### flush( )
+  * Clears the current send buffer, cancels any active file send, and sends a job kill (^-D) and alarm clear (`{clr:n}`) to the TinyG.
 +
 --
   *Returns:*:: _nothing_
-  `callback`::
+--
+
+
+[[list]]
+##### list( )
+  * Asynchronously get a list of TinyGs available. Returns a promise.
++
+--
+  *Returns:*:: http://documentup.com/kriskowal/q/[Q promise]. The promise will pass in the list of TinyG objects.
+[source,javascript]
+.list-example.js
+----
+var TinyG = require("tinyg");
+// Then create a TinyG object called 'g'
+var g = new TinyG();
+g.list().then(function(results) {
+    console.log(util.inspect(results));
+  }).catch(function(err) { couldnt_list(err); });
+----
+[source,javascript]
+.list-results.js
+----
+// Results of the above should look like.
+
+[ { path: '/dev/cu.usbmodem142413',
+    serialNumber: '021323257343',
+    dataPortPath: '/dev/cu.usbmodem142411' } ]
+----
+
 --
 
 [[openFirst]]
