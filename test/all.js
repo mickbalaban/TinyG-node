@@ -21,6 +21,20 @@ describe('tinyg', function() {
     g.openFirst();
   });
 
+  it('should be able to flush the print job', function(done) {
+    // interrupt after one second
+    setTimeout(function () {
+      (g.linesRequested > 0).should.be.true;
+
+      // flush
+      g.flush();
+      (g.linesRequested > 0).should.be.false;
+      done();
+    }, 1000);
+
+    g.sendFile(__dirname+'/1002.gcode')
+  });
+
   it('should trigger close event on close', function(done) {
 
     var errTimeout = setTimeout(function () {
