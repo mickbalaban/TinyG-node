@@ -2,7 +2,6 @@ var EventEmitter = require('events').EventEmitter;
 var util = require('util');
 var fs = require('fs');
 var Q = require('q');
-var RJSON = require("relaxed-json");
 var SerialPortModule = require("serialport"),
     SerialPort = SerialPortModule.SerialPort;
 
@@ -59,13 +58,13 @@ function TinyG() {
       part = part.replace(/([\x13\x11])/, "");
 
       // Mark everything else with a bullet
-      console.log('part: ' + part.replace(/([\x00-\x20])/, "•"));
+      // console.log('part: ' + part.replace(/([\x00-\x20])/, "•"));
 
       self.emit('data', part);
 
       if (part[0] == "{" /* make the IDE happy: } */) {
         try {
-          jsObject = RJSON.parse(part);
+          jsObject = JSON.parse(part);
         } catch(err) {
           self.emit('error', new TinyGError("Parser", util.format('Unable to parse "%s": %s', part, err), {err: err, part: part}));
           return;
@@ -185,7 +184,7 @@ TinyG.prototype.open = function (path, options) {
   };
   self.serialPortControl.on('data', _onControlData);
 
-  self.serialPortControl.on('open', function () {
+  self.serialPortControl.once('open', function () {
     console.error("OPENED "+path);
     process.nextTick(function() {
       self._open_second_channel(!options.dontSetup);
@@ -198,7 +197,7 @@ TinyG.prototype.open = function (path, options) {
 
   self.serialPortControl.on('error', _onControlError);
 
-  self.serialPortControl.on('close', function(err) {
+  self.serialPortControl.once('close', function(err) {
     console.error("CLOSED "+path);
     self.serialPortControl.removeListener('data', _onControlData);
     self.serialPortControl.removeListener('error', _onControlError);
@@ -220,7 +219,7 @@ TinyG.prototype._open_second_channel = function (doSetup) {
     };
     self.serialPortData.on('data', _dataOnData);
 
-    self.serialPortData.on('open', function () {
+    self.serialPortData.once('open', function () {
       console.error("OPENED2 "+self.dataPortPath);
       self._complete_open(doSetup);
     });
@@ -231,7 +230,7 @@ TinyG.prototype._open_second_channel = function (doSetup) {
 
     self.serialPortData.on('error', _onDataError);
 
-    self.serialPortData.on("close", function(err) {
+    self.serialPortData.once("close", function(err) {
       console.error("CLOSED "+self.dataPortPath);
       self.serialPortData.removeListener('data', _dataOnData);
       self.serialPortData.removeListener('error', _onDataError);
@@ -245,10 +244,20 @@ TinyG.prototype._open_second_channel = function (doSetup) {
 
 TinyG.prototype._complete_open = function (doSetup) {
   var self = this;
-  self.linesRequested = 5;
+  var seenConnectionBanner = false;
+
+  var deferredSetup = Q.defer();
+  var setupPromise = deferredSetup.promise;
 
   // Prepare the event listeners
   var _onResponse = function(r) {
+    if (!seenConnectionBanner) {
+      self.emit('connected', r);
+      seenConnectionBanner = true;
+      deferredSetup.resolve(r);
+      return;
+    }
+
     if (r.hasOwnProperty("rx") && self.serialPortData === null) {
       self.ignoredResponses--;
       if (!self.timedSendsOnly) {
@@ -311,27 +320,32 @@ TinyG.prototype._complete_open = function (doSetup) {
   });
 
   // Now do setup
-  if (doSetup) {
-    process.nextTick(function() {
-      self.emit('open');
-      var promise = self.set({jv:4}); //Set JSON verbosity to 2 (medium)
+  process.nextTick(function() {
+    self.emit('open');
+    if (doSetup) {
+      setupPromise = setupPromise.delay(5).then(function() {
+        self.write({clr:null});
+        return self.set({jv:4}); //Set JSON verbosity to 2 (medium)
+      });
       if (self.serialPortData === null) { // we're single channel
-        promise = promise.then(function () {
+        setupPromise = setupPromise.then(function () {
           return self.set({ex:2}); //Set flow control to 1: XON, 2: RTS/CTS
         });
-        promise = promise.then(function () {
+        setupPromise = setupPromise.then(function () {
           return self.set({rxm:1}); // Set "packet mode"
         });
       }
-      promise = promise.finally(function () {
-        self.emit('setupDone');
-      });
+    } // if doSetup
+
+    setupPromise = setupPromise.then(function () {
+      self.emit('setupDone');
+
+      // Allow data to be sent. We'll start with 5 lines to fill the buffer.
+      self.linesRequested = 5;
     });
-  } else {
-    self.emit('open');
-    self.emit('setupDone');
-  }
-};
+  }); // nextTick
+
+}; // _complete_open
 
 // Internal use only, but persistent
 
