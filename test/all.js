@@ -1,6 +1,7 @@
 var chai = require('chai');
 var should = chai.should();
 var TinyG = require("../tinyg");
+var chalk = require("../node_modules/chalk");
 
 var g = new TinyG();
 
@@ -23,9 +24,12 @@ describe('tinyg', function() {
 
   it('should be able to flush the print job', function(done) {
     // interrupt after one second
+    g.on('close', function() {
+      // this should not happen
+      console.error(chalk.bold.red("CLOSE EVENT TRIGGERED AFTER FLUSH"));
+    });
     setTimeout(function () {
       (g.linesRequested > 0).should.be.true;
-
       // flush
       g.flush();
       (g.linesRequested > 0).should.be.false;
